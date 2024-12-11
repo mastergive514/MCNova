@@ -4,6 +4,7 @@ import random
 import string
 import requests
 import time
+import threading
 
 # some default values you can touch
 
@@ -11,7 +12,10 @@ server_name = "MCNova [default name]"
 server_motd = "Welcome to my server!"
 server_port = 25565
 server_ip = "192.168.100.55" # change this to your local ip
+
+
 # do not touch this
+server_running = False
 def encode_string(s):
     # checks if the string isnt too long
     if len(s) > 64:
@@ -44,11 +48,16 @@ def receive_bytes(s, number):
     return data
     
 message = ""
-    
-listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-listener.bind((server_ip, server_port))
-listener.listen()
+
+def setupserver():
+ listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+ listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+ listener.bind((server_ip, server_port))
+ listener.listen()
+ clients = []
+
+ server_running = True
+ continuesetup(listener)
 
 def generate_salt(length=16):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -76,28 +85,71 @@ def send_heartbeat():
     else:
         print(f"Failed to send heartbeat. Status code: {response.status_code}")
         print(f"{body}")
-while True:
- send_heartbeat()
- time.sleep(30)
-client, client_address = listener.accept()
-print("Client Connected")
-client.send(struct.pack("!BB64s64sB", 0x00, 7, encode_string(server_name), encode_string(server_motd), 0))
-client.send(b"\x02")
+def receive_cp(v):
+    if v == "info":
+     info_packet = receive_bytes(client, 130)
+     if info_packet == 0x00:
+      version, name, mppass, _ = struct.unpack("!B64s64sB", info_packet)
+      name, mppass = decode_string(name), decode_string(mppass)
+    else:
+     print("Error in receiving packets")
+def send_cp(v, client):
+    if v == "info":
+         client.send(struct.pack("!BB64s64sB", 0x00, 7, encode_string(server_name), encode_string(server_motd), 0))
+         client.send(b"\x02")
+def handle_connect(self, client, client_addr):
+    print(f"New Connection from {client_addr}")
+    self.player_count += 1
+    receive_cp(info)
+    send_cp(info, client)
+    name, mppass = receive_cp()
+    print(f"{name} connected to server!")
+    self.clients.append(client_socket)
+    
+    
+ 
+def checkheartbeat():
+    send_heartbeat()
+    time.sleep(30) # Wait for 30 seconds 
+def continuesetup(listener):
+ client, client_address = listener.accept()
+ print("Client Connected")
+ client.send(struct.pack("!BB64s64sB", 0x00, 7, encode_string(server_name), encode_string(server_motd), 0))
+ client.send(b"\x02")
 
-first_packet = receive_bytes(client, 1)
-if first_packet[0] == 0x00:
-    first_packet += receive_bytes(client, 129)
-    version, name, mppass, _ = struct.unpack("!B64s64sB", first_packet)
-    name = decode_string(name)
-    mppass = decode_string(mppass)
 
-if first_packet[0] == 0x0d:
-   first_packet += receive_bytes(client, 65)
-   player_id, message = struct.unpack("!B64s", first_packet)
-   message = decode_string(message)
-   print(message)
 
-client.send(struct.pack("!BB64s", 0x0d, 255, encode_string("&eServer will shutdown soon")))
-time.sleep(2)
-client.send(struct.pack("!B64s", 0x0e, encode_string("Server is shutdowning")))
-listener.close()
+def breakserver():
+ heartbeat_thread.stop()
+ listener.close()
+ while server_running is not True:
+     break
+    
+def shutdown(client, time):
+ client.send(struct.pack("!BB64s", 0x0d, 255, encode_string("&eServer will shutdown in" + time)))
+ # TODO: make it count to time then shutdown
+ client.send(struct.pack("!B64s", 0x0e, encode_string("Server is shutdown")))
+ server_running = False
+ breakserver()
+
+def main():
+    heartbeat_thread = threading.Thread(target=checkheartbeat)
+    heartbeat_thread.daemon = True
+    heartbeat_thread.start()
+    
+    try:
+        while True:
+                client_socket, client_address = listener.server_socket.accept()
+                # Start a new thread to handle the client
+                threading.Thread(target=handle_client, args=(client_socket, client_address)).start()
+    except KeyboardInterrupt:
+            print("Server is shutting down...")
+    finally:
+            breakserver()
+
+
+
+
+if __name__ == "__main__":
+    server = Server(server_ip, server_port)  # Server running on localhost, port 12345
+    server.start()
