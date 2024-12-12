@@ -11,7 +11,6 @@ import threading
 server_name = "MCNova [default name]"
 server_motd = "Welcome to my server!"
 server_port = 25565
-server_ip = "192.168.100.55" # change this to your local ip
 server_maxplayers = 20
 
 
@@ -167,6 +166,6 @@ def shutdown(client, time):
 
 
 if __name__ == "__main__":
-    server = Server("localhost", 25565)
+    server = Server("localhost", server_port)
     server.start()
     
