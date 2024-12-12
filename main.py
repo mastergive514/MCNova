@@ -64,12 +64,13 @@ def generate_salt(length=16):
 
 # Function to send the heartbeat
 def send_heartbeat():
+    players = handle_connect()
     url = "https://classicube.net/server/heartbeat/"
     salt = generate_salt()  # Generate a random salt
     params = {
         "name": server_name,   # Replace with your server name
         "port": server_port,              # Replace with your server's port
-        "users": 0,                # Replace with the current number of players
+        "users": players.player_count,                # Replace with the current number of players
         "max": 20,                  # Replace with the maximum number of players
         "public": "true",           # Set to "true" to make the server public
         "salt": salt,               # Generated salt
