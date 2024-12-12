@@ -136,7 +136,7 @@ def main():
     heartbeat_thread = threading.Thread(target=checkheartbeat)
     heartbeat_thread.daemon = True
     heartbeat_thread.start()
-    
+    setupserver()
     try:
         while True:
                 client_socket, client_address = listener.server_socket.accept()
@@ -151,5 +151,5 @@ def main():
 
 
 if __name__ == "__main__":
-    server = Server(server_ip, server_port)  # Server running on localhost, port 12345
-    server.start()
+    main()
+    
