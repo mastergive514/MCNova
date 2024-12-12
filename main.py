@@ -12,6 +12,7 @@ server_name = "MCNova [default name]"
 server_motd = "Welcome to my server!"
 server_port = 25565
 server_ip = "192.168.100.55" # change this to your local ip
+server_maxplayers = 20
 
 
 # do not touch this
@@ -47,30 +48,18 @@ def receive_bytes(s, number):
 
     return data
     
-message = ""
-
-def setupserver():
- listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
- listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
- listener.bind((server_ip, server_port))
- listener.listen()
- clients = []
-
- server_running = True
- continuesetup(listener)
 
 def generate_salt(length=16):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 # Function to send the heartbeat
 def send_heartbeat():
-    players = handle_connect()
     url = "https://classicube.net/server/heartbeat/"
     salt = generate_salt()  # Generate a random salt
     params = {
         "name": server_name,   # Replace with your server name
         "port": server_port,              # Replace with your server's port
-        "users": players.player_count,                # Replace with the current number of players
+        "users": server.player_count,                # Replace with the current number of players
         "max": 20,                  # Replace with the maximum number of players
         "public": "true",           # Set to "true" to make the server public
         "salt": salt,               # Generated salt
@@ -86,43 +75,83 @@ def send_heartbeat():
     else:
         print(f"Failed to send heartbeat. Status code: {response.status_code}")
         print(f"{body}")
-def receive_cp(v):
+def receive_cp(v, client):
     if v == "info":
      info_packet = receive_bytes(client, 130)
      if info_packet == 0x00:
       version, name, mppass, _ = struct.unpack("!B64s64sB", info_packet)
       name, mppass = decode_string(name), decode_string(mppass)
+      return name, mppass
+    elif v == "message":
+     message_packet = receive_bytes(client, )
+     if message_packet == 0x0d:
+      packet_id, player_id, message = struct.unpack("", message_packet)
+      message = decode_string(message)
+      return message
     else:
      print("Error in receiving packets")
 def send_cp(v, client):
     if v == "info":
          client.send(struct.pack("!BB64s64sB", 0x00, 7, encode_string(server_name), encode_string(server_motd), 0))
          client.send(b"\x02")
-def handle_connect(self, client, client_addr):
-    print(f"New Connection from {client_addr}")
-    self.player_count += 1
-    receive_cp(info)
-    send_cp(info, client)
-    name, mppass = receive_cp()
-    print(f"{name} connected to server!")
-    self.clients.append(client_socket)
-    
-    
- 
+    else:
+         print("There a problem with sending packets!")
+class Server:
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.player_count = 0
+        self.client = []
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(5)
+        print(f"Server started on {self.host} {self.port}")
+        serverrunning = True
+        
+    def handle_connect(self, client, client_addr):
+     print(f"New Connection from {client_addr}")
+     if self.player_count == server_maxplayers:
+        client.send(struct.pack("!B64s", 0x0e, encode_string("Server reachs max players")))
+     else:
+      self.player_count += 1
+      receive_cp("info", client)
+      send_cp("info", client)
+      name, mppass = receive_cp("info", client)
+      print(f"{name} connected to server!")
+      self.clients.append(client_socket)
+      try:
+          while True:
+           receive_cp("message")
+           print(message)
+      except Exception as error:
+          print(f"Error handling client {client_addr}: {error}")
+      finally:
+          self.player_count -= 1
+          print("{name} disconnected!")
+          self.clients.remove(client_socket)
+          client_socket.close()
+    def start(self):
+        heartbeat_thread.daemon = True
+        heartbeat_thread.start()
+        try:
+         while True:
+                client_socket, client_address = self.server_socket.accept()
+                # Start a new thread to handle the client
+                threading.Thread(target=self.handle_connect, args=(client_socket, client_address)).start()
+        except KeyboardInterrupt:
+            print("Server is shutting down...")
+        finally:
+            breakserver()
+
+
 def checkheartbeat():
     send_heartbeat()
     time.sleep(30) # Wait for 30 seconds 
-def continuesetup(listener):
- client, client_address = listener.accept()
- print("Client Connected")
- client.send(struct.pack("!BB64s64sB", 0x00, 7, encode_string(server_name), encode_string(server_motd), 0))
- client.send(b"\x02")
 
-
+heartbeat_thread = threading.Thread(target=checkheartbeat)
 
 def breakserver():
- heartbeat_thread.stop()
- listener.close()
+ server.server_socket.close()
  while server_running is not True:
      break
     
@@ -133,24 +162,11 @@ def shutdown(client, time):
  server_running = False
  breakserver()
 
-def main():
-    heartbeat_thread = threading.Thread(target=checkheartbeat)
-    heartbeat_thread.daemon = True
-    heartbeat_thread.start()
-    setupserver()
-    try:
-        while True:
-                client_socket, client_address = listener.server_socket.accept()
-                # Start a new thread to handle the client
-                threading.Thread(target=handle_client, args=(client_socket, client_address)).start()
-    except KeyboardInterrupt:
-            print("Server is shutting down...")
-    finally:
-            breakserver()
 
 
 
 
 if __name__ == "__main__":
-    main()
+    server = Server("localhost", 25565)
+    server.start()
     
